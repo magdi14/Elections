@@ -3,12 +3,6 @@
 #include <time.h>
 #include "mpi.h"
 
-void changeValues (int *a, int *b)
-{
-    int temp = *a;
-    *a = *b;
-    *b = temp;
-}
 void shuffleRandon ( int array[], int n )
 {
     if (n > 1)
@@ -40,9 +34,6 @@ void CreateInputFile(int cand, int voters)
         int arr[cand];
         for (i=0; i<cand; i++)
             arr[i] = i+1;
-        /*for (i=0; i<cand; i++)
-            printf("%d ", arr[i]);
-        */
 
         for (i=0; i<voters; i++)
         {
