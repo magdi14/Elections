@@ -98,13 +98,14 @@ int main(int argc , char * argv[])
 {
 
 	int my_rank;		/* rank of process	*/
-	int p, i, j;			/* number of process	*/
+	int p, i, j, round, move, position;			/* number of process	*/
 	int source;		/* rank of sender	*/
 	int dest;		/* rank of reciever	*/
 	int tag = 0;
-	int cand, voters, portion;
+	int cand, voters, portion, masterPortion;
 	int* LocalCountVoters;
 	int* CountVoters;
+	float percent = 0.0;
     		/* tag for messages	*/
 		/* storage for message	*/
 	MPI_Status status;	/* return status for 	*/
@@ -130,41 +131,81 @@ int main(int argc , char * argv[])
         CreateInputFile(cand, voters);
         FILE *filePointer;
         filePointer = fopen("Voters.txt", "r");
-        if ( filePointer == NULL )
+        int** localVoters;
+        if (filePointer == NULL)
         {
             printf( "Voters file failed to open!" );
         }
+        fseek(filePointer, 4, SEEK_SET);
         portion = voters/p;
-        int** localVoters = MatAllocRaw(portion, cand);
-        fseek( filePointer, 4, SEEK_SET );
-        for(i=0; i<portion; i++)
+        //printf("%d\n", portion);
+        masterPortion = portion;
+        if (voters%p!=0)
         {
-            for(j=0; j<cand; j++)
+            //printf("reminder %d", voters%p);
+            masterPortion += (voters%p);
+            int masterMove = 0;
+            //printf("%d", masterPortion);
+            printf("Hello here\n");
+            localVoters = MatAllocRaw(masterPortion, cand);
+            for(i=0; i<masterPortion; i++)
             {
-                fscanf(filePointer, "%1d", &localVoters[i][j]);
+                for(j=0; j<cand; j++)
+                {
+                    fscanf(filePointer, "%1d", &localVoters[i][j]);
+                }
+            }
+            printf("position %d in process %d \n", 4, my_rank);
+            print2DMat(localVoters, masterPortion, cand);
+            masterMove = (cand+1)*masterPortion;
+            position = 4 + masterMove;
+            move = (cand+1)*portion;
+            MPI_Send(&portion, 1, MPI_INT, 1, tag, MPI_COMM_WORLD);
+            MPI_Send(&cand, 1, MPI_INT, 1, tag, MPI_COMM_WORLD);
+            MPI_Send(&position, 1, MPI_INT, 1, tag, MPI_COMM_WORLD);
+            for (i=2; i<p; i++)
+            {
+                MPI_Send(&portion, 1, MPI_INT, i, tag, MPI_COMM_WORLD);
+                MPI_Send(&cand, 1, MPI_INT, i, tag, MPI_COMM_WORLD);
+                position+=move;
+                MPI_Send(&position, 1, MPI_INT, i, tag, MPI_COMM_WORLD);
+            }
+
+        }
+        else
+        {
+            printf("Hello here mn gwa\n");
+            localVoters = MatAllocRaw(masterPortion, cand);
+            for(i=0; i<masterPortion; i++)
+            {
+                for(j=0; j<cand; j++)
+                {
+                    fscanf(filePointer, "%1d", &localVoters[i][j]);
+                }
+            }
+            printf("position %d in process %d \n", 4, my_rank);
+            print2DMat(localVoters, masterPortion, cand);
+            move = (cand+1)*masterPortion;
+            position = 4 + move;
+            for (i=1; i<p; i++)
+            {
+                MPI_Send(&portion, 1, MPI_INT, i, tag, MPI_COMM_WORLD);
+                MPI_Send(&cand, 1, MPI_INT, i, tag, MPI_COMM_WORLD);
+                MPI_Send(&position, 1, MPI_INT, i, tag, MPI_COMM_WORLD);
+                position+=move;
             }
         }
-        printf("position %d in process %d \n", 4, my_rank);
-        print2DMat(localVoters, portion, cand);
+
         int firstPhase;
-        for (i=0; i<portion; i++)
+        for (i=0; i<masterPortion; i++)
         {
             firstPhase = localVoters[i][0];
             CountVoters[firstPhase-1]++;
         }
-
         printf("Votes from process %d\n", my_rank);
         printArray(CountVoters, cand);
         printf("\n");
-        int move = (cand+1)*portion;
-        int position = 4 + move;
-        for (i=1; i<p; i++)
-        {
-            MPI_Send(&portion, 1, MPI_INT, i, tag, MPI_COMM_WORLD);
-            MPI_Send(&cand, 1, MPI_INT, i, tag, MPI_COMM_WORLD);
-            MPI_Send(&position, 1, MPI_INT, i, tag, MPI_COMM_WORLD);
-            position+=move;
-        }
+
         int* temp = (int*)malloc(cand * sizeof(int));
         for(i=1; i<p; i++)
         {
@@ -172,10 +213,14 @@ int main(int argc , char * argv[])
             for(j=0;j<cand; j++)
                 CountVoters[j]+=temp[j];
         }
+            for (i=0; i<cand; i++)
+            {   percent = ((float)CountVoters[i]) / ((float)voters);
+                printf("Candidate[%d] got %d/%d which is %.1f%\n", i+1, CountVoters[i], voters,(percent*100.0));
+            }
 
 
-        printArray(CountVoters, cand);
-        printf("\n");
+        //printArray(CountVoters, cand);
+        //printf("\n");
 
     }
     else
