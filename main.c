@@ -103,6 +103,8 @@ int main(int argc , char * argv[])
 	int dest;		/* rank of reciever	*/
 	int tag = 0;
 	int cand, voters, portion;
+	int* LocalCountVoters;
+	int* CountVoters;
     		/* tag for messages	*/
 		/* storage for message	*/
 	MPI_Status status;	/* return status for 	*/
@@ -122,7 +124,7 @@ int main(int argc , char * argv[])
         scanf("%d", &cand);
         printf("Enter the number of Voters:\n");
         scanf("%d", &voters);
-        int* CountVoters = (int*)malloc(cand * sizeof(int));
+        CountVoters = (int*)malloc(cand * sizeof(int));
         for (i=0; i<cand; i++)
             CountVoters[i] = 0;
         CreateInputFile(cand, voters);
@@ -142,6 +144,7 @@ int main(int argc , char * argv[])
                 fscanf(filePointer, "%1d", &localVoters[i][j]);
             }
         }
+        printf("position %d in process %d \n", 4, my_rank);
         print2DMat(localVoters, portion, cand);
         int firstPhase;
         for (i=0; i<portion; i++)
@@ -149,6 +152,10 @@ int main(int argc , char * argv[])
             firstPhase = localVoters[i][0];
             CountVoters[firstPhase-1]++;
         }
+
+        printf("Votes from process %d\n", my_rank);
+        printArray(CountVoters, cand);
+        printf("\n");
         int move = (cand+1)*portion;
         int position = 4 + move;
         for (i=1; i<p; i++)
@@ -158,6 +165,17 @@ int main(int argc , char * argv[])
             MPI_Send(&position, 1, MPI_INT, i, tag, MPI_COMM_WORLD);
             position+=move;
         }
+        int* temp = (int*)malloc(cand * sizeof(int));
+        for(i=1; i<p; i++)
+        {
+            MPI_Recv(&temp[0], cand, MPI_INT, i, tag, MPI_COMM_WORLD, &status);
+            for(j=0;j<cand; j++)
+                CountVoters[j]+=temp[j];
+        }
+
+
+        printArray(CountVoters, cand);
+        printf("\n");
 
     }
     else
@@ -176,7 +194,7 @@ int main(int argc , char * argv[])
             MPI_Recv(&position, 1, MPI_INT, 0, tag, MPI_COMM_WORLD, &status);
             //printf("position %d in process %d \n", position, my_rank);
             int** localVoters = MatAllocRaw(portion, cand);
-            int* LocalCountVoters = (int*)malloc(cand * sizeof(int));
+            LocalCountVoters = (int*)malloc(cand * sizeof(int));
             for (i=0; i<cand; i++)
                 LocalCountVoters[i] = 0;
             //printf("Hello from process %d has %d %d\n", my_rank, cand, portion);
@@ -194,16 +212,20 @@ int main(int argc , char * argv[])
             int LocalfirstPhase;
             for (i=0; i<portion; i++)
             {
+
                 LocalfirstPhase = localVoters[i][0];
                 LocalCountVoters[LocalfirstPhase-1]++;
             }
             printf("Votes from process %d\n", my_rank);
             printArray(LocalCountVoters, cand);
             printf("\n");
+            MPI_Send(&LocalCountVoters[0], cand, MPI_INT, 0, tag, MPI_COMM_WORLD);
 
 
         }
+
     }
+
 
 
 
