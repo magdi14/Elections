@@ -3,6 +3,32 @@
 #include <time.h>
 #include "mpi.h"
 
+int * checkSecRound(int arr[], int sze)
+{
+    int i, pos1, pos2, largest1, largest2;
+    largest1 = largest2 = -1;
+    int *res = (int*)malloc(4*sizeof(int));
+    for(i=0;i<4; i++)
+        res[i] = -1;
+    for (i=0; i<sze; i++)
+    {
+        if(arr[i]>=largest1)
+        {
+            largest2 = largest1;
+            pos2 = pos1;
+            largest1 = arr[i];
+            pos1 = i;
+        }
+    }
+    res[0] = largest1;
+    res[1] = pos1+1;
+    if(largest1 == largest2)
+    {
+        res[2] = largest2;
+        res[3] = pos2+1;
+    }
+    return res;
+}
 int** MatAlloc(int rows, int cols) //allocate the array and takes the value from user
 {
     int* linear = (int*)malloc(rows * cols * sizeof(int));
@@ -18,7 +44,6 @@ int** MatAlloc(int rows, int cols) //allocate the array and takes the value from
     }
     return mat;
 }
-
 int** MatAllocRaw(int rows, int cols)   //just allocate the array
 {
     int *Linear = (int*)malloc(rows* cols * sizeof(int));
@@ -98,18 +123,15 @@ int main(int argc , char * argv[])
 {
 
 	int my_rank;		/* rank of process	*/
-	int p, i, j, round, move, position;			/* number of process	*/
+	int p, i, j, SecRound, move, position;
 	int source;		/* rank of sender	*/
-	int dest;		/* rank of reciever	*/
+	int dest;		/* rank of receiver	*/
 	int tag = 0;
 	int cand, voters, portion, masterPortion;
 	int* LocalCountVoters;
 	int* CountVoters;
 	float percent = 0.0;
-    		/* tag for messages	*/
-		/* storage for message	*/
-	MPI_Status status;	/* return status for 	*/
-				/* recieve		*/
+	MPI_Status status;
 
 	/* Start up MPI */
 	MPI_Init( &argc , &argv );
@@ -213,14 +235,28 @@ int main(int argc , char * argv[])
             for(j=0;j<cand; j++)
                 CountVoters[j]+=temp[j];
         }
-            for (i=0; i<cand; i++)
-            {   percent = ((float)CountVoters[i]) / ((float)voters);
+        printf("All Candidates:\n");
+        printArray(CountVoters, cand);
+        printf("\n");
+        for (i=0; i<cand; i++)
+            {
+                percent = ((float)CountVoters[i]) / ((float)voters);
                 printf("Candidate[%d] got %d/%d which is %.1f%\n", i+1, CountVoters[i], voters,(percent*100.0));
             }
+            int *res = (int*)malloc(4*sizeof(int));
+            res = checkSecRound(CountVoters, cand);
+            //printArray(res, 4);
+            if(res[0] == res[2] && res[1] != res[3])
+            {
+                SecRound = 1;
+                printf("There's a second round between the %dth and %dth candidates\n", res[1], res[3]);
 
-
-        //printArray(CountVoters, cand);
-        //printf("\n");
+            }
+            else
+            {
+                printf("The %dth candidate wins in first round\n", res[1]);
+                printf("With number of votes equal %d out of %d", res[0], voters);
+            }
 
     }
     else
