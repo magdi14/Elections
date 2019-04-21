@@ -119,11 +119,48 @@ void CreateInputFile(cand, voters)
         fclose(filePointer);
     }
 }
+int** GetVotersToSecondRound(int** allCand, int n, int m, int fCand, int seCand)
+{
+    int** SecRoundVoters = MatAllocRaw(n, 2);
+    int i, j;
+    int k, l;
+    k=l=0;
+    for(i=0; i<n; i++)
+    {
+        for(j=0; j<m; j++)
+        {
+            if(allCand[i][j] == fCand)
+            {
+                SecRoundVoters[k][l] = allCand[i][j];
+                l++;
+                if(l>=2)
+                {
+                    k++;
+                    l=0;
+                }
+            }
+            else if(allCand[i][j] == seCand)
+            {
+                SecRoundVoters[k][l] = allCand[i][j];
+                l++;
+                if(l>=2)
+                {
+                    k++;
+                    l=0;
+                }
+            }
+            else
+                continue;
+        }
+    }
+    return SecRoundVoters;
+
+}
 int main(int argc , char * argv[])
 {
 
 	int my_rank;		/* rank of process	*/
-	int p, i, j, SecRound, move, position;
+	int p, i, j, k, SecRound, move, position;
 	int source;		/* rank of sender	*/
 	int dest;		/* rank of receiver	*/
 	int tag = 0;
@@ -245,17 +282,24 @@ int main(int argc , char * argv[])
             }
             int *res = (int*)malloc(4*sizeof(int));
             res = checkSecRound(CountVoters, cand);
-            //printArray(res, 4);
+            printArray(res, 4);     //print dictionary with the first two candidates got votes with number of votes and index of candidate
+            printf("\n");
             if(res[0] == res[2] && res[1] != res[3])
             {
                 SecRound = 1;
-                printf("There's a second round between the %dth and %dth candidates\n", res[1], res[3]);
+                printf("There's a second round between the %dth and %dth candidate\n", res[1], res[3]);
+                int** SecRoundVoters = GetVotersToSecondRound(localVoters, masterPortion, cand, res[1], res[3]);
+                print2DMat(SecRoundVoters, masterPortion, 2);
+                printf("\n");
+
 
             }
             else
             {
                 printf("The %dth candidate wins in first round\n", res[1]);
-                printf("With number of votes equal %d out of %d", res[0], voters);
+                printf("With number of votes equal %d out of %d\n", res[0], voters);
+                MPI_Finalize();
+                return 0;
             }
 
     }
