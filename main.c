@@ -160,13 +160,14 @@ int main(int argc , char * argv[])
 {
 
 	int my_rank;		/* rank of process	*/
-	int p, i, j, k, SecRound, move, position;
+	int p, i, j, k, move, position;
 	int source;		/* rank of sender	*/
 	int dest;		/* rank of receiver	*/
 	int tag = 0;
 	int cand, voters, portion, masterPortion;
 	int* LocalCountVoters;
 	int* CountVoters;
+	int SecRound = 0;
 	float percent = 0.0;
 	MPI_Status status;
 
@@ -205,7 +206,7 @@ int main(int argc , char * argv[])
             masterPortion += (voters%p);
             int masterMove = 0;
             //printf("%d", masterPortion);
-            printf("Hello here\n");
+            //printf("Hello here\n");
             localVoters = MatAllocRaw(masterPortion, cand);
             for(i=0; i<masterPortion; i++)
             {
@@ -214,8 +215,8 @@ int main(int argc , char * argv[])
                     fscanf(filePointer, "%1d", &localVoters[i][j]);
                 }
             }
-            printf("position %d in process %d \n", 4, my_rank);
-            print2DMat(localVoters, masterPortion, cand);
+            //printf("position %d in process %d \n", 4, my_rank);   //Master process starting Position if the #of processes not divisable by voters
+            //print2DMat(localVoters, masterPortion, cand);           //Votes in master process if the #of processes not divisable by voters
             masterMove = (cand+1)*masterPortion;
             position = 4 + masterMove;
             move = (cand+1)*portion;
@@ -233,7 +234,7 @@ int main(int argc , char * argv[])
         }
         else
         {
-            printf("Hello here mn gwa\n");
+            //printf("Hello here mn gwa\n");
             localVoters = MatAllocRaw(masterPortion, cand);
             for(i=0; i<masterPortion; i++)
             {
@@ -242,8 +243,8 @@ int main(int argc , char * argv[])
                     fscanf(filePointer, "%1d", &localVoters[i][j]);
                 }
             }
-            printf("position %d in process %d \n", 4, my_rank);
-            print2DMat(localVoters, masterPortion, cand);
+            //printf("position %d in process %d \n", 4, my_rank);   //starting position when voters and processes are divisable
+           // print2DMat(localVoters, masterPortion, cand);           //Voter in master process when voters and processes are divisable
             move = (cand+1)*masterPortion;
             position = 4 + move;
             for (i=1; i<p; i++)
@@ -273,7 +274,7 @@ int main(int argc , char * argv[])
                 CountVoters[j]+=temp[j];
         }
         printf("All Candidates:\n");
-        printArray(CountVoters, cand);
+        printArray(CountVoters, cand);      //All candidates after collecting every count from every process
         printf("\n");
         for (i=0; i<cand; i++)
             {
@@ -281,18 +282,76 @@ int main(int argc , char * argv[])
                 printf("Candidate[%d] got %d/%d which is %.1f%\n", i+1, CountVoters[i], voters,(percent*100.0));
             }
             int *res = (int*)malloc(4*sizeof(int));
-            res = checkSecRound(CountVoters, cand);
-            printArray(res, 4);     //print dictionary with the first two candidates got votes with number of votes and index of candidate
+            res = checkSecRound(CountVoters, cand);     //check if there is a round two
+            //printArray(res, 4);     //print dictionary with the first two candidates got votes with number of votes and index of candidate
             printf("\n");
+            printf("Press any key to continue ..\n");
+            getchar();
             if(res[0] == res[2] && res[1] != res[3])
             {
                 SecRound = 1;
+                int r2Cand1, r2cand2;
+                r2Cand1 = res[1];
+                r2cand2 = res[3];
                 printf("There's a second round between the %dth and %dth candidate\n", res[1], res[3]);
                 int** SecRoundVoters = GetVotersToSecondRound(localVoters, masterPortion, cand, res[1], res[3]);
-                print2DMat(SecRoundVoters, masterPortion, 2);
+                //print2DMat(SecRoundVoters, masterPortion, 2);   //portion of second round voters at process zero
                 printf("\n");
+                for(i=1; i<p; i++)
+                {
+                    MPI_Send(&SecRound, 1, MPI_INT, i, tag, MPI_COMM_WORLD);
+                    MPI_Send(&r2Cand1, 1, MPI_INT, i, tag, MPI_COMM_WORLD);
+                    MPI_Send(&r2cand2, 1, MPI_INT, i, tag, MPI_COMM_WORLD);
+                }
+                int LocalSecondRound;
+                int* LocalCountVotersRound2 = (int*)malloc(2 * sizeof(int));
+                for(i=0; i<2; i++)
+                    LocalCountVotersRound2[i] = 0;
+                for (i=0; i<masterPortion; i++)
+                {
 
+                    LocalSecondRound = SecRoundVoters[i][0];
+                    if(LocalSecondRound == r2Cand1)
+                        LocalCountVotersRound2[0]++;
+                    else if(LocalSecondRound == r2cand2)
+                        LocalCountVotersRound2[1]++;
+                }
+               // printf("Votes from process %d in round 2\n", my_rank);
+               // printArray(LocalCountVotersRound2, 2);    //counter of votes in second round at process zero
+                printf("\n");
+                int* tempRound2 = (int*)malloc(2 * sizeof(int));
+                for(i=1; i<p; i++)
+                {
+                    MPI_Recv(&tempRound2[0], 2, MPI_INT, i, tag, MPI_COMM_WORLD, &status);
+                    for(j=0;j<2; j++)
+                        LocalCountVotersRound2[j]+=tempRound2[j];
+                }
+                printf("All Candidates votes in round 2:\n");
+                printArray(LocalCountVotersRound2, 2);         //All candidates after collecting every count from every process in round 2
+                printf("\n");
+                for (i=0; i<2; i++)
+                {
+                    percent = ((float)LocalCountVotersRound2[i]) / ((float)voters);
+                    printf("Candidate[%d] got %d/%d which is %.1f%\n", i+1, LocalCountVotersRound2[i], voters,(percent*100.0));
+                }
+                int *res = (int*)malloc(4*sizeof(int));
+                res = checkSecRound(LocalCountVotersRound2, 2);
+                //printArray(res, 4);     //print dictionary with the first two candidates got votes with number of votes and index of candidate
+                printf("\n");
+                if(LocalCountVotersRound2[0] > LocalCountVotersRound2[1])
+                {
+                    printf("The %dth candidate wins in second round\n", r2Cand1);
+                    printf("With number of votes equal %d out of %d\n", res[0], voters);
 
+                }
+                else
+                {
+                    printf("The %dth candidate wins in second round\n", r2cand2);
+                    printf("With number of votes equal %d out of %d\n", res[0], voters);
+                }
+
+                MPI_Finalize();
+                return 0;
             }
             else
             {
@@ -301,7 +360,6 @@ int main(int argc , char * argv[])
                 MPI_Finalize();
                 return 0;
             }
-
     }
     else
     {
@@ -334,30 +392,53 @@ int main(int argc , char * argv[])
             }
             //printf("Hello from process %d has\n", my_rank);
             print2DMat(localVoters, portion, cand);
-            int LocalfirstPhase;
+            int LocalfirstRound;
             for (i=0; i<portion; i++)
             {
 
-                LocalfirstPhase = localVoters[i][0];
-                LocalCountVoters[LocalfirstPhase-1]++;
+                LocalfirstRound = localVoters[i][0];
+                LocalCountVoters[LocalfirstRound-1]++;
             }
             printf("Votes from process %d\n", my_rank);
             printArray(LocalCountVoters, cand);
             printf("\n");
             MPI_Send(&LocalCountVoters[0], cand, MPI_INT, 0, tag, MPI_COMM_WORLD);
+            MPI_Recv(&SecRound, 1, MPI_INT, 0, tag, MPI_COMM_WORLD, &status);
+            if(SecRound==1)
+            {
+                int r2Cand1, r2Cand2;
+                MPI_Recv(&r2Cand1, 1, MPI_INT, 0, tag, MPI_COMM_WORLD, &status);
+                MPI_Recv(&r2Cand2, 1, MPI_INT, 0, tag, MPI_COMM_WORLD, &status);
+                int** SecndRoundVoters = GetVotersToSecondRound(localVoters, portion, cand, r2Cand1, r2Cand2);
+                //printf("From Process Second Round validation: %d\n", SecRound);
+                printf("From Process %d Second Round Voters are : \n", my_rank);
+                print2DMat(SecndRoundVoters, portion, 2);
+                printf("\n");
+                int LocalSecondRound;
+                int* LocalCountVotersRound2 = (int*)malloc(2 * sizeof(int));
+                for(i=0; i<2; i++)LocalCountVotersRound2[i] = 0;
+                for (i=0; i<portion; i++)
+                {
 
-
+                    LocalSecondRound = SecndRoundVoters[i][0];
+                    if(LocalSecondRound == r2Cand1)
+                        LocalCountVotersRound2[0]++;
+                    else if(LocalSecondRound == r2Cand2)
+                        LocalCountVotersRound2[1]++;
+                }
+                printf("Votes from process %d in round 2\n", my_rank);
+                printArray(LocalCountVotersRound2, 2);
+                printf("\n");
+                MPI_Send(&LocalCountVotersRound2[0], 2, MPI_INT, 0, tag, MPI_COMM_WORLD);
+            }
+            else
+            {
+                MPI_Finalize();
+                return 0;
+            }
         }
 
     }
-
-
-
-
-
-
-
-
 
     MPI_Finalize();
     return 0;
